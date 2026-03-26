@@ -88,21 +88,13 @@
       <div class="modal-content">
         <button id="close-modal" class="close-btn">&times;</button>
         <h2>How it works</h2>
-        <p>This tool generates a single continuous parametric shape per mantra for visualization. The shape is derived from Sanskrit phonetics so that each utterance has a stable mathematical signature.</p>
-        
-        <h3>Phonetic Encoding</h3>
+        <p>Each mantra becomes a single continuous shape that morphs over time. Two properties of Sanskrit phonetics control the geometry:</p>
         <ul>
-          <li><strong>Sthāna (Place of Articulation):</strong> Maps to the axis of the shape. Velar sounds (like 'a') are vertical, Labial sounds (like 'u', 'm') are horizontal.</li>
-          <li><strong>Ābhyantara Prayatna (Effort):</strong> Maps to how much the base line opens into an ellipse or circle. Stops are closed (lines), Vowels are open (circles).</li>
-          <li><strong>Energy:</strong> Maps to the overall scale. Silence collapses the shape to a point.</li>
+          <li><strong>Place</strong> (sthāna) — where in the mouth a sound is made — sets the <em>axis</em> of the shape. Throat sounds are vertical, lip sounds are horizontal.</li>
+          <li><strong>Openness</strong> (prayatna) — how open the vocal tract is — sets the <em>width</em>. Stops produce thin lines, vowels open into ellipses or circles.</li>
         </ul>
-        
-        <h3>Example: oṃ (A–U–M)</h3>
-        <ul>
-          <li><strong>A:</strong> Velar vowel. Pure vertical line that opens into a tall-thin ellipse.</li>
-          <li><strong>U:</strong> Labial vowel. Morphs into a perfect circle.</li>
-          <li><strong>M:</strong> Labial stop/nasal. Collapses into a wide-thin ellipse and ends as a pure horizontal line.</li>
-        </ul>
+        <p>Take <strong>oṃ</strong> (A–U–M): <em>A</em> is a throat vowel, so the shape starts as a tall vertical ellipse. <em>U</em> is a lip vowel, so it rounds into a circle. <em>M</em> closes the lips, collapsing the circle into a horizontal line.</p>
+        <p class="note">This is a simplified model. Only place and openness are mapped visually — voicing, aspiration, and nasality are not yet distinguished. That means sounds like <em>ka, kha, ga, gha</em> (or <em>ta, tha, da, dha</em>, etc.) all produce the same shape, as do short and long vowels like <em>a/ā</em> and <em>i/ī</em>.</p>
       </div>
     </div>
 

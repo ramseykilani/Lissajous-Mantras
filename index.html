@@ -5,58 +5,107 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Lissajous Mantras</title>
     <link rel="stylesheet" href="/src/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Serif+Devanagari:wght@400;600&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="app">
-      <header>
-        <h1>Lissajous Mantras</h1>
-        <p class="lede">
-          One continuous parametric curve per mantra — see <code>SPEC.md</code>.
-        </p>
-      </header>
-      <main>
-        <label class="field">
-          <span>Mantra (Devanagari)</span>
-          <input id="mantra-input" type="text" value="ॐ" spellcheck="false" autocomplete="off" />
-          <span id="romanization" class="romanization" aria-label="IAST romanization"></span>
-        </label>
-        <div class="preset-group">
-          <span class="preset-label">Mantras</span>
-          <div class="presets">
-            <button class="preset" data-mantra="ॐ"><span class="preset-iast">oṃ</span><span class="preset-deva">ॐ</span></button>
-            <button class="preset" data-mantra="ॐ नमः शिवाय"><span class="preset-iast">oṃ namaḥ śivāya</span><span class="preset-deva">ॐ नमः शिवाय</span></button>
-            <button class="preset" data-mantra="ॐ गं गणपतये नमः"><span class="preset-iast">oṃ gaṃ gaṇapataye namaḥ</span><span class="preset-deva">ॐ गं गणपतये नमः</span></button>
-            <button class="preset" data-mantra="ॐ मणि पद्मे हूं"><span class="preset-iast">oṃ maṇi padme hūṃ</span><span class="preset-deva">ॐ मणि पद्मे हूं</span></button>
-            <button class="preset" data-mantra="ॐ नमो भगवते वासुदेवाय"><span class="preset-iast">oṃ namo bhagavate vāsudevāya</span><span class="preset-deva">ॐ नमो भगवते वासुदेवाय</span></button>
-          </div>
-        </div>
-        <div class="preset-group">
-          <span class="preset-label">Bīja (seed syllables)</span>
-          <div class="presets">
-            <button class="preset" data-mantra="ॐ"><span class="preset-iast">oṃ</span><span class="preset-deva">ॐ</span></button>
-            <button class="preset" data-mantra="ऐं"><span class="preset-iast">aiṃ</span><span class="preset-deva">ऐं</span></button>
-            <button class="preset" data-mantra="श्रीं"><span class="preset-iast">śrīṃ</span><span class="preset-deva">श्रीं</span></button>
-            <button class="preset" data-mantra="ह्रीं"><span class="preset-iast">hrīṃ</span><span class="preset-deva">ह्रीं</span></button>
-            <button class="preset" data-mantra="क्लीं"><span class="preset-iast">klīṃ</span><span class="preset-deva">क्लीं</span></button>
-            <button class="preset" data-mantra="क्रीं"><span class="preset-iast">krīṃ</span><span class="preset-deva">क्रीं</span></button>
-            <button class="preset" data-mantra="गं"><span class="preset-iast">gaṃ</span><span class="preset-deva">गं</span></button>
-            <button class="preset" data-mantra="हूं"><span class="preset-iast">hūṃ</span><span class="preset-deva">हूं</span></button>
-          </div>
-        </div>
-        <div class="controls">
-          <div class="playback">
-            <button id="play-pause" type="button" aria-label="Pause">⏸ Pause</button>
-            <button id="reset" type="button" aria-label="Reset to start">↺ Reset</button>
-          </div>
-          <label>
-            Duration
-            <input id="anim-duration" type="range" min="4" max="24" step="1" value="10" />
-            <output id="anim-duration-out">10</output>s
+      <div class="sidebar">
+        <header>
+          <h1>Lissajous Mantras</h1>
+          <p class="lede">
+            Visualizing the phonetic mathematics of Sanskrit mantras.
+            <button id="about-btn" class="text-btn">How it works</button>
+          </p>
+        </header>
+
+        <section class="input-section">
+          <label class="field">
+            <span>Mantra (Devanagari)</span>
+            <input id="mantra-input" type="text" value="ॐ" spellcheck="false" autocomplete="off" />
+            <span id="romanization" class="romanization" aria-label="IAST romanization"></span>
           </label>
-        </div>
+        </section>
+
+        <section class="presets-section">
+          <div class="tabs">
+            <button class="tab active" data-target="tab-mantras">Mantras</button>
+            <button class="tab" data-target="tab-bija">Bīja (Seed)</button>
+          </div>
+          
+          <div id="tab-mantras" class="tab-content active">
+            <div class="presets">
+              <button class="preset" data-mantra="ॐ"><span class="preset-iast">oṃ</span><span class="preset-deva">ॐ</span></button>
+              <button class="preset" data-mantra="ॐ नमः शिवाय"><span class="preset-iast">oṃ namaḥ śivāya</span><span class="preset-deva">ॐ नमः शिवाय</span></button>
+              <button class="preset" data-mantra="ॐ गं गणपतये नमः"><span class="preset-iast">oṃ gaṃ gaṇapataye namaḥ</span><span class="preset-deva">ॐ गं गणपतये नमः</span></button>
+              <button class="preset" data-mantra="ॐ मणि पद्मे हूं"><span class="preset-iast">oṃ maṇi padme hūṃ</span><span class="preset-deva">ॐ मणि पद्मे हूं</span></button>
+              <button class="preset" data-mantra="ॐ नमो भगवते वासुदेवाय"><span class="preset-iast">oṃ namo bhagavate vāsudevāya</span><span class="preset-deva">ॐ नमो भगवते वासुदेवाय</span></button>
+            </div>
+          </div>
+          
+          <div id="tab-bija" class="tab-content">
+            <div class="presets">
+              <button class="preset" data-mantra="ॐ"><span class="preset-iast">oṃ</span><span class="preset-deva">ॐ</span></button>
+              <button class="preset" data-mantra="ऐं"><span class="preset-iast">aiṃ</span><span class="preset-deva">ऐं</span></button>
+              <button class="preset" data-mantra="श्रीं"><span class="preset-iast">śrīṃ</span><span class="preset-deva">श्रीं</span></button>
+              <button class="preset" data-mantra="ह्रीं"><span class="preset-iast">hrīṃ</span><span class="preset-deva">ह्रीं</span></button>
+              <button class="preset" data-mantra="क्लीं"><span class="preset-iast">klīṃ</span><span class="preset-deva">क्लीं</span></button>
+              <button class="preset" data-mantra="क्रीं"><span class="preset-iast">krīṃ</span><span class="preset-deva">क्रीं</span></button>
+              <button class="preset" data-mantra="गं"><span class="preset-iast">gaṃ</span><span class="preset-deva">गं</span></button>
+              <button class="preset" data-mantra="हूं"><span class="preset-iast">hūṃ</span><span class="preset-deva">हूं</span></button>
+            </div>
+          </div>
+        </section>
+
+        <section class="controls-section">
+          <div class="timeline-container">
+            <label for="timeline">Timeline</label>
+            <input id="timeline" type="range" min="0" max="1" step="0.001" value="0" />
+          </div>
+
+          <div class="controls">
+            <div class="playback">
+              <button id="play-pause" type="button" aria-label="Pause">⏸ Pause</button>
+              <button id="reset" type="button" aria-label="Reset to start">↺ Reset</button>
+            </div>
+            <label class="duration-label">
+              Duration
+              <input id="anim-duration" type="range" min="4" max="24" step="1" value="10" />
+              <output id="anim-duration-out">10</output>s
+            </label>
+            <button id="export-btn" type="button" aria-label="Export GIF">⤓ Export</button>
+          </div>
+        </section>
+      </div>
+
+      <main class="canvas-container">
         <canvas id="curve" width="720" height="720" aria-label="Mantra Lissajous curve"></canvas>
       </main>
     </div>
+
+    <div id="about-modal" class="modal hidden">
+      <div class="modal-content">
+        <button id="close-modal" class="close-btn">&times;</button>
+        <h2>How it works</h2>
+        <p>This tool generates a single continuous parametric shape per mantra for visualization. The shape is derived from Sanskrit phonetics so that each utterance has a stable mathematical signature.</p>
+        
+        <h3>Phonetic Encoding</h3>
+        <ul>
+          <li><strong>Sthāna (Place of Articulation):</strong> Maps to the axis of the shape. Velar sounds (like 'a') are vertical, Labial sounds (like 'u', 'm') are horizontal.</li>
+          <li><strong>Ābhyantara Prayatna (Effort):</strong> Maps to how much the base line opens into an ellipse or circle. Stops are closed (lines), Vowels are open (circles).</li>
+          <li><strong>Energy:</strong> Maps to the overall scale. Silence collapses the shape to a point.</li>
+        </ul>
+        
+        <h3>Example: oṃ (A–U–M)</h3>
+        <ul>
+          <li><strong>A:</strong> Velar vowel. Pure vertical line that opens into a tall-thin ellipse.</li>
+          <li><strong>U:</strong> Labial vowel. Morphs into a perfect circle.</li>
+          <li><strong>M:</strong> Labial stop/nasal. Collapses into a wide-thin ellipse and ends as a pure horizontal line.</li>
+        </ul>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

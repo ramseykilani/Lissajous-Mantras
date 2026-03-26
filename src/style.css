@@ -1,0 +1,206 @@
+:root {
+  color-scheme: dark;
+  --bg: #0f1114;
+  --fg: #e8eaed;
+  --muted: #9aa0a6;
+  --accent: #7cb7ff;
+  --border: #2a2f36;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+#app {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1.75rem 1.25rem 3rem;
+}
+
+header h1 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin: 0 0 0.35rem;
+}
+
+.lede {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.lede code {
+  color: var(--accent);
+  font-size: 0.9em;
+}
+
+main {
+  margin-top: 1.75rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.field input[type="text"] {
+  font-size: 1.15rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #161a20;
+  color: var(--fg);
+  max-width: 100%;
+}
+
+.romanization {
+  font-size: 0.88rem;
+  color: var(--accent);
+  opacity: 0.8;
+  font-style: italic;
+  min-height: 1.2em;
+  letter-spacing: 0.03em;
+}
+
+/* ── Preset mantra buttons ── */
+
+.preset-group {
+  margin: 0.75rem 0 0;
+}
+
+.preset-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.preset {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.preset-iast {
+  font-size: 0.82rem;
+  color: var(--fg);
+  line-height: 1.25;
+}
+
+.preset-deva {
+  font-size: 0.72rem;
+  color: var(--muted);
+  opacity: 0.7;
+  line-height: 1.25;
+}
+
+.preset:hover {
+  border-color: var(--accent);
+  background: rgba(124, 183, 255, 0.08);
+}
+
+.preset:hover .preset-iast {
+  color: #fff;
+}
+
+.preset:hover .preset-deva {
+  opacity: 1;
+}
+
+.preset:active {
+  background: rgba(124, 183, 255, 0.16);
+}
+
+/* ── Controls row ── */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.75rem;
+  margin: 1rem 0 1.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.controls input[type="range"] {
+  width: 130px;
+}
+
+.controls output {
+  min-width: 1.5rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Playback buttons ── */
+
+.playback {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.playback button {
+  font-size: 0.82rem;
+  padding: 0.32rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #1a1f27;
+  color: var(--fg);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.playback button:hover {
+  border-color: var(--accent);
+  background: #1e2530;
+}
+
+.playback button:active {
+  background: #242b38;
+}
+
+#curve {
+  display: block;
+  width: min(100%, min(90vh, 720px));
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: radial-gradient(ellipse at center, #141820 0%, #0f1114 70%);
+}

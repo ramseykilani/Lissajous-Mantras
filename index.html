@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lissajous Mantras</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>Lissajous Mantras</h1>
+        <p class="lede">
+          One continuous parametric curve per mantra — see <code>SPEC.md</code>.
+        </p>
+      </header>
+      <main>
+        <label class="field">
+          <span>Mantra (Devanagari)</span>
+          <input id="mantra-input" type="text" value="ॐ" spellcheck="false" autocomplete="off" />
+          <span id="romanization" class="romanization" aria-label="IAST romanization"></span>
+        </label>
+        <div class="preset-group">
+          <span class="preset-label">Mantras</span>
+          <div class="presets">
+            <button class="preset" data-mantra="ॐ"><span class="preset-iast">oṃ</span><span class="preset-deva">ॐ</span></button>
+            <button class="preset" data-mantra="ॐ नमः शिवाय"><span class="preset-iast">oṃ namaḥ śivāya</span><span class="preset-deva">ॐ नमः शिवाय</span></button>
+            <button class="preset" data-mantra="ॐ गं गणपतये नमः"><span class="preset-iast">oṃ gaṃ gaṇapataye namaḥ</span><span class="preset-deva">ॐ गं गणपतये नमः</span></button>
+            <button class="preset" data-mantra="ॐ मणि पद्मे हूं"><span class="preset-iast">oṃ maṇi padme hūṃ</span><span class="preset-deva">ॐ मणि पद्मे हूं</span></button>
+            <button class="preset" data-mantra="ॐ नमो भगवते वासुदेवाय"><span class="preset-iast">oṃ namo bhagavate vāsudevāya</span><span class="preset-deva">ॐ नमो भगवते वासुदेवाय</span></button>
+          </div>
+        </div>
+        <div class="preset-group">
+          <span class="preset-label">Bīja (seed syllables)</span>
+          <div class="presets">
+            <button class="preset" data-mantra="ॐ"><span class="preset-iast">oṃ</span><span class="preset-deva">ॐ</span></button>
+            <button class="preset" data-mantra="ऐं"><span class="preset-iast">aiṃ</span><span class="preset-deva">ऐं</span></button>
+            <button class="preset" data-mantra="श्रीं"><span class="preset-iast">śrīṃ</span><span class="preset-deva">श्रीं</span></button>
+            <button class="preset" data-mantra="ह्रीं"><span class="preset-iast">hrīṃ</span><span class="preset-deva">ह्रीं</span></button>
+            <button class="preset" data-mantra="क्लीं"><span class="preset-iast">klīṃ</span><span class="preset-deva">क्लीं</span></button>
+            <button class="preset" data-mantra="क्रीं"><span class="preset-iast">krīṃ</span><span class="preset-deva">क्रीं</span></button>
+            <button class="preset" data-mantra="गं"><span class="preset-iast">gaṃ</span><span class="preset-deva">गं</span></button>
+            <button class="preset" data-mantra="हूं"><span class="preset-iast">hūṃ</span><span class="preset-deva">हूं</span></button>
+          </div>
+        </div>
+        <div class="controls">
+          <div class="playback">
+            <button id="play-pause" type="button" aria-label="Pause">⏸ Pause</button>
+            <button id="reset" type="button" aria-label="Reset to start">↺ Reset</button>
+          </div>
+          <label>
+            Duration
+            <input id="anim-duration" type="range" min="4" max="24" step="1" value="10" />
+            <output id="anim-duration-out">10</output>s
+          </label>
+        </div>
+        <canvas id="curve" width="720" height="720" aria-label="Mantra Lissajous curve"></canvas>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

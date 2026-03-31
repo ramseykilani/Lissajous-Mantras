@@ -1,5 +1,13 @@
 import { buildTracks, DEFAULT_VIEW_ROTATION } from "../math/curve.js";
-import type { ParsedMantra } from "../phonetics/types.js";
+import type { ParsedMantra, TimedTarget } from "../phonetics/types.js";
+
+export type MantraSample = {
+  ax: number;
+  ay: number;
+  E: number;
+  phi: number;
+  delta: number;
+};
 
 /** Segments for one full θ sweep (0…2π); higher = smoother polyline, negligible CPU here. */
 export const DEFAULT_THETA_SAMPLES = 2400;
@@ -141,5 +149,265 @@ export function drawPath(
     }
   }
   ctx.stroke();
+  ctx.restore();
+}
+
+// ── Sine wave timeline ──
+
+function buildTrackFn(parsed: ParsedMantra) {
+  const times = parsed.timed.map((x) => x.t);
+  return buildTracks(
+    times,
+    parsed.timed.map((x) => x.target.s),
+    parsed.timed.map((x) => x.target.p),
+    parsed.timed.map((x) => x.target.E),
+    parsed.timed.map((x) => x.target.phi),
+    parsed.timed.map((x) => x.target.delta),
+  );
+}
+
+export function getMantraSample(parsed: ParsedMantra, t: number): MantraSample {
+  const track = buildTrackFn(parsed);
+  const sample = track(t);
+  const W = 0.0;
+  return {
+    ax: sample.s + (1 - sample.s) * sample.p * W,
+    ay: 1.0 - sample.s * (1 - sample.p),
+    E: sample.E,
+    phi: sample.phi,
+    delta: sample.delta,
+  };
+}
+
+const WAVE_PTS = 300;
+
+function getActivePhoneme(parsed: ParsedMantra, t: number): TimedTarget | null {
+  const voiced = parsed.timed.filter((pt) => pt.iast);
+  if (voiced.length === 0) return null;
+  for (let i = 0; i < voiced.length; i++) {
+    const pt = voiced[i]!;
+    const prev = voiced[i - 1];
+    const next = voiced[i + 1];
+    const regionL = prev ? (prev.t + pt.t) / 2 : 0;
+    const regionR = next ? (pt.t + next.t) / 2 : 1;
+    if (t >= regionL && t < regionR) return pt;
+  }
+  return voiced[voiced.length - 1] ?? null;
+}
+
+/**
+ * Draws the currently-active phoneme letter centred in the Lissajous area,
+ * so the viewer knows which sound the shape represents at any given moment.
+ */
+export function drawActivePhoneme(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  parsed: ParsedMantra,
+  t: number,
+): void {
+  const active = getActivePhoneme(parsed, t);
+  if (!active) return;
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "italic bold 52px Inter, system-ui";
+  ctx.fillStyle = "rgba(126, 210, 255, 0.22)";
+  ctx.fillText(active.iast, w / 2, h * 0.28);
+  ctx.restore();
+}
+
+
+/** Area of the Lissajous ellipse at mantra time frac — proxy for vocal amplitude. */
+function shapeAmplitude(
+  track: ReturnType<typeof buildTrackFn>,
+  frac: number,
+): number {
+  const s = track(frac);
+  const W = 0.0;
+  const ax = s.s + (1 - s.s) * s.p * W;
+  const ay = 1.0 - s.s * (1 - s.p);
+  // Area of a 1:1 Lissajous ellipse = π·(E·ax)·(E·ay)·|sin(δ)|
+  // We drop the constant π and use E·ax·ay·|sin(δ)| as the normalized amplitude.
+  return s.E * ax * ay * Math.abs(Math.sin(s.delta));
+}
+
+/**
+ * Draws the Lissajous figure with a vocal-amplitude envelope at the bottom.
+ * The envelope's x-axis is mantra time t (0→1). Its y-value is the geometric
+ * area of the Lissajous shape at that moment — zero when the shape is a line
+ * (no sound) and maximal when the ellipse is fullest (peak volume). A dot
+ * tracks the current playback position.
+ */
+export function drawDecompositionView(
+  ctx: CanvasRenderingContext2D,
+  cssW: number,
+  cssH: number,
+  parsed: ParsedMantra,
+  points: PathPoint[],
+  t: number,
+): void {
+  const track = buildTrackFn(parsed);
+
+  // Layout
+  const stripH = Math.round(cssH * 0.18);
+  const lissH = cssH - stripH;
+
+  // ── Axes ──
+  ctx.save();
+  ctx.strokeStyle = "rgba(102, 178, 255, 0.15)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cssW / 2, 0);
+  ctx.lineTo(cssW / 2, lissH);
+  ctx.moveTo(0, lissH / 2);
+  ctx.lineTo(cssW, lissH / 2);
+  ctx.stroke();
+  ctx.restore();
+
+  // ── Separator ──
+  ctx.save();
+  ctx.strokeStyle = "rgba(102, 178, 255, 0.08)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, lissH);
+  ctx.lineTo(cssW, lissH);
+  ctx.stroke();
+  ctx.restore();
+
+  // ── Lissajous curve ──
+  ctx.save();
+  ctx.shadowBlur = 12;
+  ctx.shadowColor = "rgba(102, 178, 255, 0.6)";
+  drawPath(ctx, points, cssW, lissH, "rgba(126, 210, 255, 0.95)", 2);
+  ctx.restore();
+
+  // ── Active phoneme label ──
+  drawActivePhoneme(ctx, cssW, lissH, parsed, t);
+
+  // ── Vocal amplitude envelope (bottom strip) ──
+  const wavePad = 20;
+  const waveL = wavePad;
+  const waveR = cssW - wavePad;
+  const waveW = waveR - waveL;
+  const waveBottom = lissH + stripH - 6;   // baseline (silence)
+  const waveTop    = lissH + 6;             // max amplitude
+
+  // Sample the amplitude curve and find the peak for normalisation
+  const amps: number[] = [];
+  for (let i = 0; i <= WAVE_PTS; i++) {
+    amps.push(shapeAmplitude(track, i / WAVE_PTS));
+  }
+  const maxAmp = Math.max(...amps, 1e-9);
+
+  // Draw as a filled envelope (area under the curve = visual volume)
+  ctx.save();
+  ctx.shadowBlur = 6;
+  ctx.shadowColor = "rgba(126, 210, 255, 0.3)";
+  ctx.strokeStyle = "rgba(126, 210, 255, 0.7)";
+  ctx.fillStyle   = "rgba(126, 210, 255, 0.08)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i <= WAVE_PTS; i++) {
+    const frac = i / WAVE_PTS;
+    const norm  = amps[i]! / maxAmp;
+    const px = waveL + frac * waveW;
+    const py = waveBottom - norm * (waveBottom - waveTop);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  // Close fill path along the baseline
+  ctx.lineTo(waveR, waveBottom);
+  ctx.lineTo(waveL, waveBottom);
+  ctx.closePath();
+  ctx.fill();
+  // Redraw just the top edge for the stroke
+  ctx.beginPath();
+  for (let i = 0; i <= WAVE_PTS; i++) {
+    const frac = i / WAVE_PTS;
+    const norm  = amps[i]! / maxAmp;
+    const px = waveL + frac * waveW;
+    const py = waveBottom - norm * (waveBottom - waveTop);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // ── Phoneme region markers ──
+  // Treat each phoneme's keyframe as the centre of its region.
+  // Dividers sit at the midpoint between adjacent keyframes.
+  // Labels are centred within their region at a fixed baseline position.
+  const voiced = parsed.timed.filter((pt) => pt.iast);
+  const labelY = waveBottom - 4;
+
+  ctx.save();
+  for (let i = 0; i < voiced.length; i++) {
+    const pt = voiced[i]!;
+    const prev = voiced[i - 1];
+    const next = voiced[i + 1];
+
+    const regionL = prev ? (prev.t + pt.t) / 2 : 0;
+    const regionR = next ? (pt.t + next.t) / 2 : 1;
+
+    const centerX = waveL + ((regionL + regionR) / 2) * waveW;
+
+    // Divider at left edge of region (skip the very first)
+    if (prev) {
+      const divX = waveL + regionL * waveW;
+      ctx.strokeStyle = "rgba(126, 210, 255, 0.18)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      ctx.moveTo(divX, lissH + 4);
+      ctx.lineTo(divX, waveBottom);
+      ctx.stroke();
+    }
+
+    // Label centred in its region
+    ctx.setLineDash([]);
+    ctx.font = "11px Inter, system-ui";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(126, 210, 255, 0.6)";
+    ctx.fillText(pt.iast, centerX, labelY);
+  }
+  ctx.restore();
+
+  // ── Playback dot on the envelope ──
+  const currentAmp = shapeAmplitude(track, t) / maxAmp;
+  const waveDotX = waveL + t * waveW;
+  const waveDotY = waveBottom - currentAmp * (waveBottom - waveTop);
+
+  // Vertical cursor line from the dot up into the Lissajous area
+  ctx.save();
+  ctx.strokeStyle = "rgba(126, 210, 255, 0.12)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 4]);
+  ctx.beginPath();
+  ctx.moveTo(waveDotX, waveDotY);
+  ctx.lineTo(waveDotX, lissH);
+  ctx.stroke();
+  ctx.restore();
+
+  // Dot
+  const r = 4;
+  ctx.save();
+  ctx.fillStyle = "rgba(126, 210, 255, 0.95)";
+  ctx.shadowBlur = 10;
+  ctx.shadowColor = "rgba(126, 210, 255, 0.5)";
+  ctx.beginPath();
+  ctx.arc(waveDotX, waveDotY, r, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.restore();
+
+  // ── Mantra labels ──
+  ctx.save();
+  ctx.fillStyle = "rgba(139, 148, 158, 0.85)";
+  ctx.font = "14px 'Noto Serif Devanagari', serif";
+  ctx.textAlign = "left";
+  ctx.fillText(parsed.label, 12, lissH - 28);
+  ctx.fillStyle = "rgba(102, 178, 255, 0.85)";
+  ctx.font = "italic 13px Inter, system-ui";
+  ctx.fillText(parsed.romanization, 12, lissH - 12);
   ctx.restore();
 }

@@ -17,6 +17,8 @@ export type ArticulationTarget = {
 export type TimedTarget = {
   t: number;
   id: PhonemeId;
+  /** IAST romanization for this phoneme, e.g. "a", "u", "m". Empty for silence. */
+  iast: string;
   target: ArticulationTarget;
 };
 

@@ -1,5 +1,5 @@
 import { parseMantra } from "./phonetics/parse.js";
-import { drawPath, sampleMantraShape } from "./render/draw.js";
+import { drawPath, sampleMantraShape, drawDecompositionView, drawActivePhoneme } from "./render/draw.js";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#curve");
 const input = document.querySelector<HTMLInputElement>("#mantra-input");
@@ -11,6 +11,7 @@ const durationOut = document.querySelector<HTMLOutputElement>("#anim-duration-ou
 const timelineEl = document.querySelector<HTMLInputElement>("#timeline");
 const presetBtns = document.querySelectorAll<HTMLButtonElement>(".preset");
 const exportBtn = document.querySelector<HTMLButtonElement>("#export-btn");
+const showWavesEl = document.querySelector<HTMLInputElement>("#show-waves");
 
 // Tabs
 const tabs = document.querySelectorAll<HTMLButtonElement>(".tab");
@@ -69,6 +70,7 @@ let cycleStartMs = performance.now();
 let pausedAtT = 0;
 let rafId: number | null = null;
 let isDraggingTimeline = false;
+let showWaves = showWavesEl?.checked ?? false;
 
 function getDurationMs(): number {
   return Number(durationEl.value) * 1000;
@@ -122,6 +124,43 @@ function reset(): void {
 
 // ── Rendering ──
 
+function drawStandardView(
+  ctx: CanvasRenderingContext2D,
+  cssW: number,
+  cssH: number,
+  parsed: ReturnType<typeof parseMantra>,
+  points: { x: number; y: number }[],
+  t: number,
+): void {
+  ctx.save();
+  ctx.strokeStyle = "rgba(102, 178, 255, 0.15)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cssW / 2, 0);
+  ctx.lineTo(cssW / 2, cssH);
+  ctx.moveTo(0, cssH / 2);
+  ctx.lineTo(cssW, cssH / 2);
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(139, 148, 158, 0.85)";
+  ctx.font = "14px 'Noto Serif Devanagari', serif";
+  ctx.textAlign = "left";
+  ctx.fillText(parsed.label, 12, cssH - 28);
+
+  ctx.fillStyle = "rgba(102, 178, 255, 0.85)";
+  ctx.font = "italic 13px Inter, system-ui";
+  ctx.fillText(parsed.romanization, 12, cssH - 12);
+  ctx.restore();
+
+  ctx.save();
+  ctx.shadowBlur = 12;
+  ctx.shadowColor = "rgba(102, 178, 255, 0.6)";
+  drawPath(ctx, points, cssW, cssH, "rgba(126, 210, 255, 0.95)", 2);
+  ctx.restore();
+
+  drawActivePhoneme(ctx, cssW, cssH, parsed, t);
+}
+
 function drawFrame(
   ctx: CanvasRenderingContext2D,
   cssW: number,
@@ -141,40 +180,17 @@ function drawFrame(
   const points = sampleMantraShape(parsed, { t });
 
   if (isExport) {
-    ctx.fillStyle = "#07090c"; // Match var(--bg)
+    ctx.fillStyle = "#07090c";
     ctx.fillRect(0, 0, cssW, cssH);
+    drawStandardView(ctx, cssW, cssH, parsed, points, t);
   } else {
     ctx.clearRect(0, 0, cssW, cssH);
+    if (showWaves) {
+      drawDecompositionView(ctx, cssW, cssH, parsed, points, t);
+    } else {
+      drawStandardView(ctx, cssW, cssH, parsed, points, t);
+    }
   }
-
-  // Draw axes
-  ctx.save();
-  ctx.strokeStyle = "rgba(102, 178, 255, 0.15)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(cssW / 2, 0);
-  ctx.lineTo(cssW / 2, cssH);
-  ctx.moveTo(0, cssH / 2);
-  ctx.lineTo(cssW, cssH / 2);
-  ctx.stroke();
-  
-  // Label
-  ctx.fillStyle = "rgba(139, 148, 158, 0.85)";
-  ctx.font = "14px 'Noto Serif Devanagari', serif";
-  ctx.textAlign = "left";
-  ctx.fillText(parsed.label, 12, cssH - 28);
-  
-  ctx.fillStyle = "rgba(102, 178, 255, 0.85)";
-  ctx.font = "italic 13px Inter, system-ui";
-  ctx.fillText(parsed.romanization, 12, cssH - 12);
-  ctx.restore();
-
-  // Draw glowing curve
-  ctx.save();
-  ctx.shadowBlur = 12;
-  ctx.shadowColor = "rgba(102, 178, 255, 0.6)";
-  drawPath(ctx, points, cssW, cssH, "rgba(126, 210, 255, 0.95)", 2);
-  ctx.restore();
 }
 
 function render(): void {
@@ -196,9 +212,12 @@ function render(): void {
     rafId = null;
   }
 
-  if (playing && !isDraggingTimeline) {
+  const needsLoop = (playing && !isDraggingTimeline) || showWaves;
+
+  if (needsLoop) {
     const loop = (): void => {
-      drawFrame(ctx, cssW, cssH, getCurrentT());
+      const t = playing && !isDraggingTimeline ? getCurrentT() : pausedAtT;
+      drawFrame(ctx, cssW, cssH, t);
       rafId = requestAnimationFrame(loop);
     };
     loop();
@@ -251,6 +270,16 @@ timelineEl.addEventListener("change", () => {
     cycleStartMs = performance.now() - pausedAtT * getDurationMs();
     render();
   }
+});
+
+showWavesEl?.addEventListener("change", () => {
+  showWaves = showWavesEl.checked;
+  if (showWaves) {
+    canvas.classList.add("decomp-active");
+  } else {
+    canvas.classList.remove("decomp-active");
+  }
+  render();
 });
 
 presetBtns.forEach((btn) => {
@@ -361,5 +390,6 @@ modal?.addEventListener("click", (e) => {
 
 window.addEventListener("resize", debounce(() => render(), 48));
 
+if (showWaves) canvas.classList.add("decomp-active");
 syncPlayPauseButton();
 render();

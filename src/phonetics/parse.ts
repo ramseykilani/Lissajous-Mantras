@@ -17,12 +17,13 @@ export function layoutTimes(n: number): number[] {
 }
 
 export function parseMantra(input: string): ParsedMantra {
-  const { ids, iast } = parseDevanagari(input);
+  const { ids, iasts, iast } = parseDevanagari(input);
   const times = layoutTimes(ids.length);
 
   const timed: TimedTarget[] = ids.map((id, i) => ({
     t: times[i]!,
     id,
+    iast: iasts[i]!,
     target: getTarget(id),
   }));
 

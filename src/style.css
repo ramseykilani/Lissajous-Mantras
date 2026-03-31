@@ -206,6 +206,27 @@ header h1 {
   color: var(--muted);
 }
 
+.preset-label {
+  font-size: 0.85rem;
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.preset-tradition {
+  font-size: 0.7rem;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.preset:hover .preset-label {
+  color: #fff;
+}
+
+.preset:hover .preset-tradition {
+  color: #fff;
+}
+
 .preset:hover {
   border-color: var(--accent);
   background: #1c2128;
@@ -332,6 +353,24 @@ input[type="range"]:focus {
   cursor: not-allowed;
 }
 
+/* ── Wave toggle ── */
+.wave-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.wave-toggle input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
 /* ── Canvas Area ── */
 .canvas-container {
   display: flex;
@@ -348,8 +387,12 @@ input[type="range"]:focus {
   aspect-ratio: 1 / 1;
   height: auto;
   border-radius: 50%;
-  /* Optional subtle glow behind the canvas */
   box-shadow: 0 0 80px rgba(102, 178, 255, 0.05);
+  transition: border-radius 0.3s ease;
+}
+
+#curve.decomp-active {
+  border-radius: 12px;
 }
 
 /* ── Modal ── */

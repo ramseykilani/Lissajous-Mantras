@@ -83,19 +83,23 @@ const VOWEL_SIGNS: Record<string, PhonemeInfo> = {
 
 const VIRAMA = "्"; // U+094D
 
-const DEFAULT_IDS: PhonemeId[] = ["silence", "a", "u", "ma", "silence"];
+const DEFAULT_IDS:   PhonemeId[] = ["silence", "a", "u", "ma", "silence"];
+const DEFAULT_IASTS: string[]    = ["",        "a", "u", "m",  ""];
 
 /**
- * Parse a Devanagari string into a sequence of PhonemeIds and an IAST romanization.
+ * Parse a Devanagari string into a sequence of PhonemeIds, per-phoneme IAST
+ * labels, and a full IAST romanization string.
  *
  * Handles consonant + vowel-sign combinations, virama (halant) for bare consonants,
  * inherent 'a', anusvara, visarga, and the ॐ ligature.
  */
 export function parseDevanagari(input: string): {
   ids: PhonemeId[];
+  iasts: string[];
   iast: string;
 } {
   const ids: PhonemeId[] = ["silence"];
+  const iasts: string[]  = [""];
   let iast = "";
   const chars = [...input]; // proper Unicode iteration
   let i = 0;
@@ -103,10 +107,11 @@ export function parseDevanagari(input: string): {
   while (i < chars.length) {
     const ch = chars[i]!;
 
-    // ॐ (U+0950) — expands to a-u-ma
+    // ॐ (U+0950) — expands to a-u-ma, romanized as "aum"
     if (ch === "ॐ") {
       ids.push("a", "u", "ma");
-      iast += "oṃ";
+      iasts.push("a", "u", "m");
+      iast += "aum";
       i++;
       continue;
     }
@@ -115,6 +120,7 @@ export function parseDevanagari(input: string): {
     const vowel = VOWELS[ch];
     if (vowel) {
       ids.push(vowel.id);
+      iasts.push(vowel.iast);
       iast += vowel.iast;
       i++;
       continue;
@@ -123,29 +129,31 @@ export function parseDevanagari(input: string): {
     // Consonant
     const cons = CONSONANTS[ch];
     if (cons) {
-      ids.push(cons.id);
-      iast += cons.iast;
-
       const next = chars[i + 1];
       if (next) {
         const sign = VOWEL_SIGNS[next];
         if (sign) {
           // Consonant + vowel sign (replaces inherent 'a')
-          ids.push(sign.id);
-          iast += sign.iast;
+          ids.push(cons.id, sign.id);
+          iasts.push(cons.iast, sign.iast);
+          iast += cons.iast + sign.iast;
           i += 2;
           continue;
         }
         if (next === VIRAMA) {
           // Bare consonant (no vowel)
+          ids.push(cons.id);
+          iasts.push(cons.iast);
+          iast += cons.iast;
           i += 2;
           continue;
         }
       }
 
-      // Inherent short 'a'
-      ids.push("a");
-      iast += "a";
+      // Consonant with inherent short 'a'
+      ids.push(cons.id, "a");
+      iasts.push(cons.iast, "a");
+      iast += cons.iast + "a";
       i++;
       continue;
     }
@@ -153,6 +161,7 @@ export function parseDevanagari(input: string): {
     // Anusvara (ं) or chandrabindu (ँ) — nasal
     if (ch === "ं" || ch === "ँ") {
       ids.push("anusvara");
+      iasts.push("ṃ");
       iast += "ṃ";
       i++;
       continue;
@@ -161,6 +170,7 @@ export function parseDevanagari(input: string): {
     // Visarga (ः)
     if (ch === "ः") {
       ids.push("visarga");
+      iasts.push("ḥ");
       iast += "ḥ";
       i++;
       continue;
@@ -178,13 +188,14 @@ export function parseDevanagari(input: string): {
   }
 
   ids.push("silence");
+  iasts.push("");
 
-  // If nothing was parsed (no Devanagari found), fall back to default oṃ
+  // If nothing was parsed (no Devanagari found), fall back to default
   if (ids.length <= 2) {
-    return { ids: [...DEFAULT_IDS], iast: "oṃ" };
+    return { ids: [...DEFAULT_IDS], iasts: [...DEFAULT_IASTS], iast: "aum" };
   }
 
-  return { ids, iast };
+  return { ids, iasts, iast };
 }
 
 /** Returns true when the string contains at least one Devanagari character. */

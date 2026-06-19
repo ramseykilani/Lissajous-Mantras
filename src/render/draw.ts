@@ -42,14 +42,22 @@ export function sampleMantraShape(
   const delta = parsed.timed.map((x) => x.target.delta);
 
   const track = buildTracks(times, s, p, E, phi, delta);
-  
+  const verticalityAt = buildVerticalityTrack(parsed);
+
   // Evaluate the phonetic parameters at the specific mantra time `t`
   const sample = track(o.t);
-  
+
+  // The X:Y aspect comes from the eased verticality track that the bottom graph
+  // also plots, so figure and graph stay in exact sync. Overall size (magnitude)
+  // still comes from the s,p tracks; only the aspect *angle* is eased.
   const W = 0.0;
-  const ax = sample.s + (1 - sample.s) * sample.p * W;
-  const ay = 1.0 - sample.s * (1 - sample.p);
-  
+  const axRaw = sample.s + (1 - sample.s) * sample.p * W;
+  const ayRaw = 1.0 - sample.s * (1 - sample.p);
+  const mag = Math.hypot(axRaw, ayRaw);
+  const psi = verticalityAt(o.t) * (Math.PI / 2); // 1→vertical (ψ=90°), 0→horizontal (ψ=0°)
+  const ax = mag * Math.cos(psi);
+  const ay = mag * Math.sin(psi);
+
   const pts: PathPoint[] = [];
   const n = Math.max(8, Math.floor(o.samples));
   
@@ -218,26 +226,84 @@ export function drawActivePhoneme(
 }
 
 
-/** Area of the Lissajous ellipse at mantra time frac — proxy for vocal amplitude. */
-function shapeAmplitude(
-  track: ReturnType<typeof buildTrackFn>,
-  frac: number,
-): number {
-  const s = track(frac);
+/** Verticality of a single phoneme target, in [0,1] — the angle of its (X,Y)
+ * extent vector. Energy E is a common factor in ax and ay that cancels, so this
+ * is pure shape proportion, not loudness:
+ *   1   → tall vertical line   (ay ≫ ax, e.g. throat sounds)  → top of strip
+ *   0.5 → circle               (ax === ay)                    → centre line
+ *   0   → wide horizontal line (ax ≫ ay, e.g. closed-lip m)   → bottom of strip
+ * The angle (atan2) keeps the 0↔∞ ends symmetric about the circle. ax and ay are
+ * never both zero, so atan2 is well-defined.
+ */
+function targetVerticality(target: TimedTarget["target"]): number {
   const W = 0.0;
-  const ax = s.s + (1 - s.s) * s.p * W;
-  const ay = 1.0 - s.s * (1 - s.p);
-  // Area of a 1:1 Lissajous ellipse = π·(E·ax)·(E·ay)·|sin(δ)|
-  // We drop the constant π and use E·ax·ay·|sin(δ)| as the normalized amplitude.
-  return s.E * ax * ay * Math.abs(Math.sin(s.delta));
+  const ax = target.s + (1 - target.s) * target.p * W;
+  const ay = 1.0 - target.s * (1 - target.p);
+  return Math.atan2(ay, ax) / (Math.PI / 2);
+}
+
+const clamp01 = (x: number): number => Math.max(0, Math.min(1, x));
+
+/**
+ * Eased verticality track, shared by the figure ([sampleMantraShape]) and the
+ * bottom graph so the two are in exact sync with no separate smoothing.
+ *
+ * Each held/silent shape is an "anchor"; a transition between two anchors is a
+ * single raised-cosine ramp. The effect:
+ *   • held / silent shapes read as flat shoulders (the leading & lagging lines);
+ *   • a transition is one clean sine sweep — slope zero at the shoulders and a
+ *     single maximum at the midpoint, like a sine crossing zero (no bumps);
+ *   • interior phonemes simply land on that sweep rather than pinning it, so the
+ *     curve never overshoots. For aum the circle u lands at ~0.5 (still a circle)
+ *     at the steepest point of the descent.
+ *
+ * Anchors are the endpoints plus every point where the verticality reverses
+ * direction. Silence inherits its nearest voiced neighbour's verticality, so a
+ * silent tail holds the last real shape instead of dragging the curve onward.
+ */
+function buildVerticalityTrack(parsed: ParsedMantra): (t: number) => number {
+  const timed = parsed.timed;
+  const n = timed.length;
+  const ts = timed.map((pt) => pt.t);
+  const v = timed.map((pt) => targetVerticality(pt.target));
+
+  for (let i = 0; i < n; i++) {
+    if (timed[i]!.id !== "silence") continue;
+    let j = i + 1;
+    while (j < n && timed[j]!.id === "silence") j++;
+    if (j >= n) { j = i - 1; while (j >= 0 && timed[j]!.id === "silence") j--; }
+    if (j >= 0 && j < n) v[i] = v[j]!;
+  }
+
+  const EPS = 1e-9;
+  const dir = (j: number): number =>
+    v[j + 1]! > v[j]! + EPS ? 1 : v[j + 1]! < v[j]! - EPS ? -1 : 0;
+  const anchors: number[] = [0];
+  for (let i = 1; i < n - 1; i++) if (dir(i - 1) !== dir(i)) anchors.push(i);
+  if (n > 1) anchors.push(n - 1);
+
+  return (t: number): number => {
+    if (n === 0) return 0.5;
+    if (t <= ts[0]!) return clamp01(v[0]!);
+    if (t >= ts[n - 1]!) return clamp01(v[n - 1]!);
+    let s = 0;
+    while (
+      s < anchors.length - 1 &&
+      !(ts[anchors[s]!]! <= t && t <= ts[anchors[s + 1]!]!)
+    ) s++;
+    const A = anchors[s]!, B = anchors[s + 1]!;
+    const span = ts[B]! - ts[A]!;
+    const tau = span > 0 ? (t - ts[A]!) / span : 0;
+    return clamp01(v[A]! + (v[B]! - v[A]!) * (1 - Math.cos(Math.PI * tau)) / 2);
+  };
 }
 
 /**
- * Draws the Lissajous figure with a vocal-amplitude envelope at the bottom.
- * The envelope's x-axis is mantra time t (0→1). Its y-value is the geometric
- * area of the Lissajous shape at that moment — zero when the shape is a line
- * (no sound) and maximal when the ellipse is fullest (peak volume). A dot
- * tracks the current playback position.
+ * Draws the Lissajous figure with an aspect-ratio graph at the bottom.
+ * The graph's x-axis is mantra time t (0→1). Its y-value is the figure's
+ * verticality at that moment — top edge when the shape is a tall vertical line,
+ * the center line when it's a circle, and the bottom edge when it's a wide
+ * horizontal line. A dot tracks the current playback position.
  */
 export function drawDecompositionView(
   ctx: CanvasRenderingContext2D,
@@ -247,7 +313,7 @@ export function drawDecompositionView(
   points: PathPoint[],
   t: number,
 ): void {
-  const track = buildTrackFn(parsed);
+  const aspectAt = buildVerticalityTrack(parsed);
 
   // Layout
   const stripH = Math.round(cssH * 0.18);
@@ -285,49 +351,55 @@ export function drawDecompositionView(
   // ── Active phoneme label ──
   drawActivePhoneme(ctx, cssW, lissH, parsed, t);
 
-  // ── Vocal amplitude envelope (bottom strip) ──
+  // ── Aspect-ratio graph (bottom strip) ──
   const wavePad = 20;
   const waveL = wavePad;
   const waveR = cssW - wavePad;
   const waveW = waveR - waveL;
-  const waveBottom = lissH + stripH - 6;   // baseline (silence)
-  const waveTop    = lissH + 6;             // max amplitude
+  const waveBottom = lissH + stripH - 6;   // value 0 → wide horizontal line
+  const waveTop    = lissH + 6;             // value 1 → tall vertical line
+  const waveMid    = waveBottom - 0.5 * (waveBottom - waveTop); // value 0.5 → circle
 
-  // Sample the amplitude curve and find the peak for normalisation
-  const amps: number[] = [];
-  for (let i = 0; i <= WAVE_PTS; i++) {
-    amps.push(shapeAmplitude(track, i / WAVE_PTS));
-  }
-  const maxAmp = Math.max(...amps, 1e-9);
+  const valueToY = (value: number): number =>
+    waveBottom - value * (waveBottom - waveTop);
 
-  // Draw as a filled envelope (area under the curve = visual volume)
+  // ── Center reference line (circle = X:Y of 1:1) ──
+  ctx.save();
+  ctx.strokeStyle = "rgba(126, 210, 255, 0.15)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 4]);
+  ctx.beginPath();
+  ctx.moveTo(waveL, waveMid);
+  ctx.lineTo(waveR, waveMid);
+  ctx.stroke();
+  ctx.restore();
+
+  // ── Edge markers (orient the reader: tall above, wide below) ──
+  ctx.save();
+  ctx.font = "9px Inter, system-ui";
+  ctx.textAlign = "right";
+  ctx.fillStyle = "rgba(126, 210, 255, 0.4)";
+  ctx.textBaseline = "top";
+  ctx.fillText("↕", waveL - 6, waveTop);
+  ctx.textBaseline = "middle";
+  ctx.fillText("○", waveL - 6, waveMid);
+  ctx.textBaseline = "bottom";
+  ctx.fillText("↔", waveL - 6, waveBottom);
+  ctx.restore();
+
+  // ── Aspect-ratio curve (clean stroked line, absolute 0..1 scale) ──
   ctx.save();
   ctx.shadowBlur = 6;
   ctx.shadowColor = "rgba(126, 210, 255, 0.3)";
-  ctx.strokeStyle = "rgba(126, 210, 255, 0.7)";
-  ctx.fillStyle   = "rgba(126, 210, 255, 0.08)";
+  ctx.strokeStyle = "rgba(126, 210, 255, 0.85)";
   ctx.lineWidth = 1.5;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
   ctx.beginPath();
   for (let i = 0; i <= WAVE_PTS; i++) {
     const frac = i / WAVE_PTS;
-    const norm  = amps[i]! / maxAmp;
     const px = waveL + frac * waveW;
-    const py = waveBottom - norm * (waveBottom - waveTop);
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  // Close fill path along the baseline
-  ctx.lineTo(waveR, waveBottom);
-  ctx.lineTo(waveL, waveBottom);
-  ctx.closePath();
-  ctx.fill();
-  // Redraw just the top edge for the stroke
-  ctx.beginPath();
-  for (let i = 0; i <= WAVE_PTS; i++) {
-    const frac = i / WAVE_PTS;
-    const norm  = amps[i]! / maxAmp;
-    const px = waveL + frac * waveW;
-    const py = waveBottom - norm * (waveBottom - waveTop);
+    const py = valueToY(aspectAt(frac));
     if (i === 0) ctx.moveTo(px, py);
     else ctx.lineTo(px, py);
   }
@@ -373,10 +445,9 @@ export function drawDecompositionView(
   }
   ctx.restore();
 
-  // ── Playback dot on the envelope ──
-  const currentAmp = shapeAmplitude(track, t) / maxAmp;
+  // ── Playback dot on the aspect-ratio curve ──
   const waveDotX = waveL + t * waveW;
-  const waveDotY = waveBottom - currentAmp * (waveBottom - waveTop);
+  const waveDotY = valueToY(aspectAt(t));
 
   // Vertical cursor line from the dot up into the Lissajous area
   ctx.save();

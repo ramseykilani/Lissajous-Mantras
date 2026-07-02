@@ -25,17 +25,18 @@
             <span>Mantra (Devanagari)</span>
             <input id="mantra-input" type="text" value="ॐ" spellcheck="false" autocomplete="off" />
             <span id="romanization" class="romanization" aria-label="IAST romanization"></span>
+            <span id="parse-warnings" class="parse-warnings" role="status" hidden></span>
           </label>
         </section>
 
         <section class="presets-section">
-          <div class="tabs">
-            <button class="tab active" data-target="tab-mantras">Mantras</button>
-            <button class="tab" data-target="tab-bija">Bīja (Seed)</button>
-            <button class="tab" data-target="tab-world">World</button>
+          <div class="tabs" role="tablist" aria-label="Preset categories">
+            <button class="tab active" id="tab-btn-mantras" data-target="tab-mantras" role="tab" aria-selected="true" aria-controls="tab-mantras">Mantras</button>
+            <button class="tab" id="tab-btn-bija" data-target="tab-bija" role="tab" aria-selected="false" aria-controls="tab-bija" tabindex="-1">Bīja (Seed)</button>
+            <button class="tab" id="tab-btn-world" data-target="tab-world" role="tab" aria-selected="false" aria-controls="tab-world" tabindex="-1">World</button>
           </div>
-          
-          <div id="tab-mantras" class="tab-content active">
+
+          <div id="tab-mantras" class="tab-content active" role="tabpanel" aria-labelledby="tab-btn-mantras">
             <div class="presets">
               <button class="preset" data-mantra="ॐ"><span class="preset-iast">aum</span><span class="preset-deva">ॐ</span></button>
               <button class="preset" data-mantra="ॐ नमः शिवाय"><span class="preset-iast">aum namaḥ śivāya</span><span class="preset-deva">ॐ नमः शिवाय</span></button>
@@ -45,7 +46,7 @@
             </div>
           </div>
           
-          <div id="tab-bija" class="tab-content">
+          <div id="tab-bija" class="tab-content" role="tabpanel" aria-labelledby="tab-btn-bija">
             <div class="presets">
               <button class="preset" data-mantra="ॐ"><span class="preset-iast">aum</span><span class="preset-deva">ॐ</span></button>
               <button class="preset" data-mantra="ऐं"><span class="preset-iast">aiṃ</span><span class="preset-deva">ऐं</span></button>
@@ -57,7 +58,7 @@
               <button class="preset" data-mantra="हूं"><span class="preset-iast">hūṃ</span><span class="preset-deva">हूं</span></button>
             </div>
           </div>
-          <div id="tab-world" class="tab-content">
+          <div id="tab-world" class="tab-content" role="tabpanel" aria-labelledby="tab-btn-world">
             <div class="presets">
               <button class="preset" data-mantra="एलोहिम"><span class="preset-label">Elohim</span><span class="preset-tradition">Hebrew</span><span class="preset-deva">एलोहिम</span></button>
               <button class="preset" data-mantra="बिस्मिल्लाह"><span class="preset-label">Bismillah</span><span class="preset-tradition">Islam</span><span class="preset-deva">बिस्मिल्लाह</span></button>
@@ -105,16 +106,18 @@
     </div>
 
     <div id="about-modal" class="modal hidden">
-      <div class="modal-content">
-        <button id="close-modal" class="close-btn">&times;</button>
-        <h2>How it works</h2>
-        <p>Each mantra becomes a single continuous shape that morphs over time. Two properties of Sanskrit phonetics control the geometry:</p>
+      <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="about-title">
+        <button id="close-modal" class="close-btn" aria-label="Close">&times;</button>
+        <h2 id="about-title">How it works</h2>
+        <p>Each mantra becomes a single continuous shape that morphs over time. Four properties of Sanskrit phonetics control the drawing:</p>
         <ul>
           <li><strong>Place</strong> (sthāna) — where in the mouth a sound is made — sets the <em>axis</em> of the shape. Throat sounds are vertical, lip sounds are horizontal.</li>
           <li><strong>Openness</strong> (prayatna) — how open the vocal tract is — sets the <em>width</em>. Stops produce thin lines, vowels open into ellipses or circles.</li>
+          <li><strong>Voicing</strong> (ghoṣa) — whether the vocal cords hum — sets the <em>weight</em> of the stroke. Voiced sounds like <em>ga</em> draw heavier and brighter than unvoiced ones like <em>ka</em>.</li>
+          <li><strong>Aspiration</strong> (prāṇa) — the puff of breath — adds a soft <em>halo</em> around the line. <em>Kha</em> breathes; <em>ka</em> doesn't.</li>
         </ul>
         <p>Take <strong>aum</strong>: <em>A</em> is a throat vowel, so the shape starts as a tall vertical ellipse. <em>U</em> is a lip vowel, so it rounds into a circle. <em>M</em> closes the lips, collapsing the circle into a horizontal line.</p>
-        <p class="note">This is a simplified model. Only place and openness are mapped visually — voicing, aspiration, and nasality are not yet distinguished. That means sounds like <em>ka, kha, ga, gha</em> (or <em>ta, tha, da, dha</em>, etc.) all produce the same shape, as do short and long vowels like <em>a/ā</em> and <em>i/ī</em>.</p>
+        <p class="note">This is a simplified, archetypal model. Nasality and vowel length are not yet distinguished — <em>a/ā</em> and <em>i/ī</em> look identical.</p>
       </div>
     </div>
 

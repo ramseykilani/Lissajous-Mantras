@@ -6,9 +6,14 @@ Deployed @ https://lissajous-mantras.kilani-ramsey.workers.dev/
 
 ## A note on accuracy
 
-This project uses a **simplified, archetypal model** of Sanskrit phonetics — not a complete one. Only a handful of articulatory dimensions (place of articulation and degree of openness) are mapped to visual parameters; many important features of the language (voicing, aspiration, nasality, sandhi, etc.) are not yet distinguished visually. The intent is contemplative visualization and aesthetic exploration, not linguistic or pedagogical exactness.
+This project uses a **simplified, archetypal model** of Sanskrit phonetics — not a complete one. Four articulatory dimensions are mapped to visual parameters:
 
-In practice this means many distinct sounds produce the same shape. For example, all four consonants in each stop group — *ka/kha/ga/gha*, *ca/cha/ja/jha*, *ṭa/ṭha/ḍa/ḍha*, *ta/tha/da/dha*, *pa/pha/ba/bha* — look identical because they share the same place and manner; only voicing and aspiration differ, which are not yet encoded. Short and long vowels (*a/ā*, *i/ī*, *u/ū*) are likewise visually indistinguishable.
+- **Sthāna** (place of articulation) → the axis of the shape,
+- **Ābhyantara prayatna** (openness) → how far the line opens into an ellipse,
+- **Ghoṣa** (voicing) → stroke weight and glow,
+- **Prāṇa** (aspiration) → a soft breath halo around the stroke.
+
+So the members of each stop group now differ: *ka* is a thin quiet line, *kha* adds a breath halo, *ga* draws heavier and brighter, *gha* does both. Nasality and vowel length are still **not** encoded — short and long vowels (*a/ā*, *i/ī*, *u/ū*) are visually indistinguishable, and sandhi is not modeled. The intent is contemplative visualization and aesthetic exploration, not linguistic or pedagogical exactness.
 
 See `SPEC.md` §3.2 and §7 for the full list of what is and isn't encoded and where the project is headed.
 
@@ -23,16 +28,19 @@ Open the URL Vite prints (usually `http://localhost:5173`).
 
 ### Input
 
-Paste **Devanagari** into the input field — the default is **`ॐ`**. The IAST romanization (e.g. *oṃ*) appears below the input for reference. Ask any LLM to write a mantra in Sanskrit/Devanagari and paste the result.
+Paste **Devanagari** into the input field — the default is **`ॐ`**. The IAST romanization (`ॐ` → *aum*) appears below the input for reference. Ask any LLM to write a mantra in Sanskrit/Devanagari and paste the result.
+
+The parser covers the full varṇamālā plus nukta (loanword) consonants like *ज़ z* and *फ़ f* in both Unicode encodings, candra vowels (*ऑ*, *ऍ*), the Vedic retroflex lateral *ळ*, avagraha, and danda. Anything it can't interpret is listed in a small "Not recognized" note under the input instead of being silently dropped; unmapped Devanagari letters render with a neutral placeholder shape.
 
 ### Presets
 
-Two rows of clickable buttons populate the input instantly:
+Three tabs of clickable buttons populate the input instantly:
 
-- **Mantras** — full phrases like *oṃ namaḥ śivāya*, *oṃ gaṃ gaṇapataye namaḥ*, *oṃ maṇi padme hūṃ*, *oṃ namo bhagavate vāsudevāya*.
-- **Bīja (seed syllables)** — single-syllable seeds: *oṃ*, *aiṃ*, *śrīṃ*, *hrīṃ*, *klīṃ*, *krīṃ*, *gaṃ*, *hūṃ*.
+- **Mantras** — full phrases like *aum namaḥ śivāya*, *aum gaṃ gaṇapataye namaḥ*, *aum maṇi padme hūṃ*, *aum namo bhagavate vāsudevāya*.
+- **Bīja (seed syllables)** — single-syllable seeds: *aum*, *aiṃ*, *śrīṃ*, *hrīṃ*, *klīṃ*, *krīṃ*, *gaṃ*, *hūṃ*.
+- **World** — sacred words from other traditions transliterated into Devanagari (*Elohim*, *Bismillah*, *Sat Nam*, *Mu*, …).
 
-Each button shows the IAST romanization as primary text with the Devanagari below it.
+Each button shows the primary text with the Devanagari below it.
 
 ### Playback
 
@@ -40,11 +48,12 @@ Each button shows the IAST romanization as primary text with the Devanagari belo
 - **Reset** — rewinds to the start (*t* = 0) and resumes playback.
 - **Duration** slider — seconds for one full morph (4–24 s).
 
-## Build
+## Build & test
 
 ```bash
-npm run build
+npm run build    # type-checks (tsc), then bundles with Vite
 npm run preview
+npm test         # Vitest: parser, registry, and spline tests
 ```
 
 ## Layout
@@ -57,4 +66,4 @@ npm run preview
 | `src/render/` | Sampling + canvas |
 | `src/main.ts` | UI, playback controls, preset wiring |
 
-Extend **`src/phonetics/registry.ts`** with new `PhonemeId` targets. The Devanagari parser in **`src/phonetics/devanagari.ts`** already covers the full varṇamālā.
+To add a new sound: one lookup entry in **`src/phonetics/devanagari.ts`** (character → id) and one target in **`src/phonetics/registry.ts`** (id → sthāna, prayatna, ghoṣa, prāṇa coordinates). The math never changes — every sound is a point in that articulatory space. The parser already covers the full varṇamālā, nukta consonants, and candra vowels; unrecognized characters are surfaced in the UI so gaps are visible rather than silent.

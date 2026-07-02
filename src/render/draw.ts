@@ -1,13 +1,5 @@
-import { buildTracks, DEFAULT_VIEW_ROTATION } from "../math/curve.js";
+import { axesFor, buildTracks, DEFAULT_VIEW_ROTATION, type TrackSample } from "../math/curve.js";
 import type { ParsedMantra, TimedTarget } from "../phonetics/types.js";
-
-export type MantraSample = {
-  ax: number;
-  ay: number;
-  E: number;
-  phi: number;
-  delta: number;
-};
 
 /** Segments for one full θ sweep (0…2π); higher = smoother polyline, negligible CPU here. */
 export const DEFAULT_THETA_SAMPLES = 2400;
@@ -25,8 +17,107 @@ const defaultOptions: SampleOptions = {
 
 export type PathPoint = { x: number; y: number };
 
+// ── Per-mantra caches ──
+// parseMantra memoizes on the input string, so the ParsedMantra object is
+// identity-stable across animation frames; tracks are built once per mantra
+// instead of once per frame.
+
+const trackCache = new WeakMap<ParsedMantra, (t: number) => TrackSample>();
+
+function trackFor(parsed: ParsedMantra): (t: number) => TrackSample {
+  let track = trackCache.get(parsed);
+  if (!track) {
+    const timed = parsed.timed;
+    track = buildTracks(
+      timed.map((x) => x.t),
+      timed.map((x) => x.target.s),
+      timed.map((x) => x.target.p),
+      timed.map((x) => x.target.E),
+      timed.map((x) => x.target.phi),
+      timed.map((x) => x.target.delta),
+    );
+    trackCache.set(parsed, track);
+  }
+  return track;
+}
+
+const verticalityCache = new WeakMap<ParsedMantra, (t: number) => number>();
+
+function verticalityFor(parsed: ParsedMantra): (t: number) => number {
+  let fn = verticalityCache.get(parsed);
+  if (!fn) {
+    fn = buildVerticalityTrack(parsed);
+    verticalityCache.set(parsed, fn);
+  }
+  return fn;
+}
+
+// ── Ghoṣa/prāṇa style track ──
+
+type MantraStyle = { ghosa: number; prana: number };
+
+/** Fraction of the narrower neighbouring region that a boundary cross-fade
+ * occupies. The rest of each region is a flat plateau, so a consonant's
+ * voicing/aspiration displays at full strength while its letter is active
+ * instead of being averaged toward the neighbouring vowel. */
+const STYLE_BLEND = 0.6;
+
+function buildStyleTrack(parsed: ParsedMantra): (t: number) => MantraStyle {
+  const regions = phonemeRegions(parsed);
+  const n = regions.length;
+  if (n === 0) return () => ({ ghosa: 0, prana: 0 });
+  const g = regions.map((r) => r.pt.target.ghosa);
+  const h = regions.map((r) => r.pt.target.prana);
+  const widths = regions.map((r) => r.regionR - r.regionL);
+
+  const raisedCos = (u: number): number =>
+    (1 - Math.cos(Math.PI * Math.max(0, Math.min(1, u)))) / 2;
+
+  return (t: number): MantraStyle => {
+    let i = 0;
+    while (i < n - 1 && t >= regions[i]!.regionR) i++;
+    let ghosa = g[i]!;
+    let prana = h[i]!;
+
+    // Cross-fade zones are centred on region boundaries and never overlap
+    // (each extends at most 0.3× the narrower region's width to each side).
+    if (i > 0) {
+      const b = regions[i]!.regionL;
+      const z = 0.5 * STYLE_BLEND * Math.min(widths[i]!, widths[i - 1]!);
+      if (z > 0 && t < b + z) {
+        const m = raisedCos((t - (b - z)) / (2 * z));
+        ghosa = g[i - 1]! + (g[i]! - g[i - 1]!) * m;
+        prana = h[i - 1]! + (h[i]! - h[i - 1]!) * m;
+        return { ghosa, prana };
+      }
+    }
+    if (i < n - 1) {
+      const b = regions[i]!.regionR;
+      const z = 0.5 * STYLE_BLEND * Math.min(widths[i]!, widths[i + 1]!);
+      if (z > 0 && t > b - z) {
+        const m = raisedCos((t - (b - z)) / (2 * z));
+        ghosa = g[i]! + (g[i + 1]! - g[i]!) * m;
+        prana = h[i]! + (h[i + 1]! - h[i]!) * m;
+      }
+    }
+    return { ghosa, prana };
+  };
+}
+
+const styleCache = new WeakMap<ParsedMantra, (t: number) => MantraStyle>();
+
+/** Ghoṣa/prāṇa style channels at mantra time t (plateau-interpolated). */
+export function styleFor(parsed: ParsedMantra): (t: number) => MantraStyle {
+  let fn = styleCache.get(parsed);
+  if (!fn) {
+    fn = buildStyleTrack(parsed);
+    styleCache.set(parsed, fn);
+  }
+  return fn;
+}
+
 /**
- * Samples a single full Lissajous cycle (theta from 0 to 2pi) 
+ * Samples a single full Lissajous cycle (theta from 0 to 2pi)
  * using the phonetic parameters evaluated at mantra time `t`.
  */
 export function sampleMantraShape(
@@ -34,105 +125,51 @@ export function sampleMantraShape(
   options: Partial<SampleOptions> = {},
 ): PathPoint[] {
   const o = { ...defaultOptions, ...options };
-  const times = parsed.timed.map((x) => x.t);
-  const s = parsed.timed.map((x) => x.target.s);
-  const p = parsed.timed.map((x) => x.target.p);
-  const E = parsed.timed.map((x) => x.target.E);
-  const phi = parsed.timed.map((x) => x.target.phi);
-  const delta = parsed.timed.map((x) => x.target.delta);
-
-  const track = buildTracks(times, s, p, E, phi, delta);
-  const verticalityAt = buildVerticalityTrack(parsed);
 
   // Evaluate the phonetic parameters at the specific mantra time `t`
-  const sample = track(o.t);
+  const sample = trackFor(parsed)(o.t);
 
   // The X:Y aspect comes from the eased verticality track that the bottom graph
   // also plots, so figure and graph stay in exact sync. Overall size (magnitude)
   // still comes from the s,p tracks; only the aspect *angle* is eased.
-  const W = 0.0;
-  const axRaw = sample.s + (1 - sample.s) * sample.p * W;
-  const ayRaw = 1.0 - sample.s * (1 - sample.p);
+  const { ax: axRaw, ay: ayRaw } = axesFor(sample.s, sample.p);
   const mag = Math.hypot(axRaw, ayRaw);
-  const psi = verticalityAt(o.t) * (Math.PI / 2); // 1→vertical (ψ=90°), 0→horizontal (ψ=0°)
+  const psi = verticalityFor(parsed)(o.t) * (Math.PI / 2); // 1→vertical (ψ=90°), 0→horizontal (ψ=0°)
   const ax = mag * Math.cos(psi);
   const ay = mag * Math.sin(psi);
 
   const pts: PathPoint[] = [];
   const n = Math.max(8, Math.floor(o.samples));
-  
+
   const c = Math.cos(DEFAULT_VIEW_ROTATION);
   const sn = Math.sin(DEFAULT_VIEW_ROTATION);
 
   // Draw one full Lissajous cycle for these parameters
   for (let i = 0; i <= n; i++) {
     const theta = (i / n) * 2 * Math.PI;
-    
+
     const x0 = sample.E * ax * Math.sin(theta + sample.phi);
     const y0 = sample.E * ay * Math.sin(theta + sample.phi + sample.delta);
-    
+
     const x = x0 * c - y0 * sn;
     const y = x0 * sn + y0 * c;
-    
+
     pts.push({ x, y });
   }
 
   return pts;
 }
 
-export function boundsOf(
-  points: { x: number; y: number }[],
-  pad = 0.12,
-): { minX: number; maxX: number; minY: number; maxY: number } {
-  if (points.length === 0) {
-    return { minX: -1, maxX: 1, minY: -1, maxY: 1 };
-  }
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-  for (const p of points) {
-    minX = Math.min(minX, p.x);
-    maxX = Math.max(maxX, p.x);
-    minY = Math.min(minY, p.y);
-    maxY = Math.max(maxY, p.y);
-  }
-  const w = maxX - minX || 1;
-  const h = maxY - minY || 1;
-  const px = w * pad;
-  const py = h * pad;
-  return {
-    minX: minX - px,
-    maxX: maxX + px,
-    minY: minY - py,
-    maxY: maxY + py,
-  };
-}
-
-export type RectBounds = {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-};
-
-/**
- * When animating a partial path, pass bounds from the full curve so scale/center stay fixed.
- */
-export function drawPath(
+function drawPath(
   ctx: CanvasRenderingContext2D,
   points: PathPoint[],
   w: number,
   h: number,
   strokeStyle: string,
   lineWidth: number,
-  layoutBounds?: RectBounds,
 ): void {
   if (points.length === 0) return;
 
-  const b = layoutBounds ?? boundsOf(points);
-  const bw = b.maxX - b.minX;
-  const bh = b.maxY - b.minY;
   // Use a fixed scale based on the maximum possible extent (approx 1.5)
   // so the shape actually grows and shrinks visually, rather than auto-scaling to fill the screen.
   const fixedScale = 0.92 * Math.min(w / 2.5, h / 2.5);
@@ -160,47 +197,74 @@ export function drawPath(
   ctx.restore();
 }
 
+/**
+ * Draws the mantra figure with phonetic styling from the ghoṣa/prāṇa tracks:
+ * voicing (ghoṣa) drives stroke weight and glow — the hum of the vocal cords;
+ * aspiration (prāṇa) adds a wide, faint "breath halo" pass around the stroke.
+ * Shared by the standard and decomposition views so the two stay identical.
+ */
+export function drawMantraFigure(
+  ctx: CanvasRenderingContext2D,
+  points: PathPoint[],
+  w: number,
+  h: number,
+  parsed: ParsedMantra,
+  t: number,
+): void {
+  const { ghosa, prana } = styleFor(parsed)(t);
+
+  // Ghoṣa (voicing) → weight, brightness, glow: unvoiced is a thin faint
+  // wire, fully voiced is a thick luminous stroke.
+  const lineWidth = 0.8 + 2.6 * ghosa;
+  const glow = 2 + 13 * ghosa;
+  const alpha = 0.55 + 0.4 * ghosa;
+
+  // Prāṇa (aspiration) → a wide translucent breath band around the stroke,
+  // growing with aspiration strength.
+  if (prana > 0.02) {
+    ctx.save();
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = `rgba(150, 225, 255, ${(0.45 * prana).toFixed(3)})`;
+    drawPath(
+      ctx, points, w, h,
+      `rgba(150, 225, 255, ${(0.28 * prana).toFixed(3)})`,
+      lineWidth + 4 + 10 * prana,
+    );
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.shadowBlur = glow;
+  ctx.shadowColor = "rgba(102, 178, 255, 0.6)";
+  drawPath(ctx, points, w, h, `rgba(126, 210, 255, ${alpha.toFixed(3)})`, lineWidth);
+  ctx.restore();
+}
+
 // ── Sine wave timeline ──
-
-function buildTrackFn(parsed: ParsedMantra) {
-  const times = parsed.timed.map((x) => x.t);
-  return buildTracks(
-    times,
-    parsed.timed.map((x) => x.target.s),
-    parsed.timed.map((x) => x.target.p),
-    parsed.timed.map((x) => x.target.E),
-    parsed.timed.map((x) => x.target.phi),
-    parsed.timed.map((x) => x.target.delta),
-  );
-}
-
-export function getMantraSample(parsed: ParsedMantra, t: number): MantraSample {
-  const track = buildTrackFn(parsed);
-  const sample = track(t);
-  const W = 0.0;
-  return {
-    ax: sample.s + (1 - sample.s) * sample.p * W,
-    ay: 1.0 - sample.s * (1 - sample.p),
-    E: sample.E,
-    phi: sample.phi,
-    delta: sample.delta,
-  };
-}
 
 const WAVE_PTS = 300;
 
+type PhonemeRegion = { pt: TimedTarget; regionL: number; regionR: number };
+
+/**
+ * Labeled (non-silence) phonemes with their time regions: each keyframe is
+ * the centre of its region, and dividers sit at midpoints between neighbours.
+ */
+function phonemeRegions(parsed: ParsedMantra): PhonemeRegion[] {
+  const labeled = parsed.timed.filter((pt) => pt.iast);
+  return labeled.map((pt, i) => ({
+    pt,
+    regionL: i > 0 ? (labeled[i - 1]!.t + pt.t) / 2 : 0,
+    regionR: i < labeled.length - 1 ? (pt.t + labeled[i + 1]!.t) / 2 : 1,
+  }));
+}
+
 function getActivePhoneme(parsed: ParsedMantra, t: number): TimedTarget | null {
-  const voiced = parsed.timed.filter((pt) => pt.iast);
-  if (voiced.length === 0) return null;
-  for (let i = 0; i < voiced.length; i++) {
-    const pt = voiced[i]!;
-    const prev = voiced[i - 1];
-    const next = voiced[i + 1];
-    const regionL = prev ? (prev.t + pt.t) / 2 : 0;
-    const regionR = next ? (pt.t + next.t) / 2 : 1;
+  const regions = phonemeRegions(parsed);
+  for (const { pt, regionL, regionR } of regions) {
     if (t >= regionL && t < regionR) return pt;
   }
-  return voiced[voiced.length - 1] ?? null;
+  return regions[regions.length - 1]?.pt ?? null;
 }
 
 /**
@@ -236,9 +300,7 @@ export function drawActivePhoneme(
  * never both zero, so atan2 is well-defined.
  */
 function targetVerticality(target: TimedTarget["target"]): number {
-  const W = 0.0;
-  const ax = target.s + (1 - target.s) * target.p * W;
-  const ay = 1.0 - target.s * (1 - target.p);
+  const { ax, ay } = axesFor(target.s, target.p);
   return Math.atan2(ay, ax) / (Math.PI / 2);
 }
 
@@ -313,7 +375,7 @@ export function drawDecompositionView(
   points: PathPoint[],
   t: number,
 ): void {
-  const aspectAt = buildVerticalityTrack(parsed);
+  const aspectAt = verticalityFor(parsed);
 
   // Layout
   const stripH = Math.round(cssH * 0.18);
@@ -342,11 +404,7 @@ export function drawDecompositionView(
   ctx.restore();
 
   // ── Lissajous curve ──
-  ctx.save();
-  ctx.shadowBlur = 12;
-  ctx.shadowColor = "rgba(102, 178, 255, 0.6)";
-  drawPath(ctx, points, cssW, lissH, "rgba(126, 210, 255, 0.95)", 2);
-  ctx.restore();
+  drawMantraFigure(ctx, points, cssW, lissH, parsed, t);
 
   // ── Active phoneme label ──
   drawActivePhoneme(ctx, cssW, lissH, parsed, t);
@@ -407,25 +465,17 @@ export function drawDecompositionView(
   ctx.restore();
 
   // ── Phoneme region markers ──
-  // Treat each phoneme's keyframe as the centre of its region.
-  // Dividers sit at the midpoint between adjacent keyframes.
   // Labels are centred within their region at a fixed baseline position.
-  const voiced = parsed.timed.filter((pt) => pt.iast);
+  const regions = phonemeRegions(parsed);
   const labelY = waveBottom - 4;
 
   ctx.save();
-  for (let i = 0; i < voiced.length; i++) {
-    const pt = voiced[i]!;
-    const prev = voiced[i - 1];
-    const next = voiced[i + 1];
-
-    const regionL = prev ? (prev.t + pt.t) / 2 : 0;
-    const regionR = next ? (pt.t + next.t) / 2 : 1;
-
+  for (let i = 0; i < regions.length; i++) {
+    const { pt, regionL, regionR } = regions[i]!;
     const centerX = waveL + ((regionL + regionR) / 2) * waveW;
 
     // Divider at left edge of region (skip the very first)
-    if (prev) {
+    if (i > 0) {
       const divX = waveL + regionL * waveW;
       ctx.strokeStyle = "rgba(126, 210, 255, 0.18)";
       ctx.lineWidth = 1;

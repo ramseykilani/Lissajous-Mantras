@@ -1,14 +1,21 @@
 import { parseMantra } from "./phonetics/parse.js";
-import { drawPath, sampleMantraShape, drawDecompositionView, drawActivePhoneme } from "./render/draw.js";
+import { drawMantraFigure, sampleMantraShape, drawDecompositionView, drawActivePhoneme } from "./render/draw.js";
 
-const canvas = document.querySelector<HTMLCanvasElement>("#curve");
-const input = document.querySelector<HTMLInputElement>("#mantra-input");
-const romanizationEl = document.querySelector<HTMLSpanElement>("#romanization");
-const playPauseBtn = document.querySelector<HTMLButtonElement>("#play-pause");
-const resetBtn = document.querySelector<HTMLButtonElement>("#reset");
-const durationEl = document.querySelector<HTMLInputElement>("#anim-duration");
-const durationOut = document.querySelector<HTMLOutputElement>("#anim-duration-out");
-const timelineEl = document.querySelector<HTMLInputElement>("#timeline");
+/** Required DOM node — fail fast (and keep the non-null type) if the markup drifts. */
+function must<T extends Element>(el: T | null, selector: string): T {
+  if (!el) throw new Error(`Missing DOM node: ${selector}`);
+  return el;
+}
+
+const canvas = must(document.querySelector<HTMLCanvasElement>("#curve"), "#curve");
+const input = must(document.querySelector<HTMLInputElement>("#mantra-input"), "#mantra-input");
+const romanizationEl = must(document.querySelector<HTMLSpanElement>("#romanization"), "#romanization");
+const parseWarningsEl = document.querySelector<HTMLSpanElement>("#parse-warnings");
+const playPauseBtn = must(document.querySelector<HTMLButtonElement>("#play-pause"), "#play-pause");
+const resetBtn = must(document.querySelector<HTMLButtonElement>("#reset"), "#reset");
+const durationEl = must(document.querySelector<HTMLInputElement>("#anim-duration"), "#anim-duration");
+const durationOut = must(document.querySelector<HTMLOutputElement>("#anim-duration-out"), "#anim-duration-out");
+const timelineEl = must(document.querySelector<HTMLInputElement>("#timeline"), "#timeline");
 const presetBtns = document.querySelectorAll<HTMLButtonElement>(".preset");
 const exportBtn = document.querySelector<HTMLButtonElement>("#export-btn");
 const showWavesEl = document.querySelector<HTMLInputElement>("#show-waves");
@@ -22,19 +29,6 @@ const aboutBtn = document.querySelector<HTMLButtonElement>("#about-btn");
 const closeModalBtn = document.querySelector<HTMLButtonElement>("#close-modal");
 const modal = document.querySelector<HTMLDivElement>("#about-modal");
 
-if (
-  !canvas ||
-  !input ||
-  !romanizationEl ||
-  !playPauseBtn ||
-  !resetBtn ||
-  !durationEl ||
-  !durationOut ||
-  !timelineEl
-) {
-  throw new Error("Missing DOM nodes");
-}
-
 // Check for reduced motion preference
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 if (prefersReducedMotion) {
@@ -45,7 +39,7 @@ if (prefersReducedMotion) {
 
 function updateUrl(mantra: string) {
   const url = new URL(window.location.href);
-  if (mantra === "ॐ") {
+  if (mantra === "ॐ" || mantra.trim() === "") {
     url.searchParams.delete("mantra");
   } else {
     url.searchParams.set("mantra", mantra);
@@ -152,14 +146,12 @@ function drawStandardView(
   ctx.fillText(parsed.romanization, 12, cssH - 12);
   ctx.restore();
 
-  ctx.save();
-  ctx.shadowBlur = 12;
-  ctx.shadowColor = "rgba(102, 178, 255, 0.6)";
-  drawPath(ctx, points, cssW, cssH, "rgba(126, 210, 255, 0.95)", 2);
-  ctx.restore();
+  drawMantraFigure(ctx, points, cssW, cssH, parsed, t);
 
   drawActivePhoneme(ctx, cssW, cssH, parsed, t);
 }
+
+let lastShownParse: ReturnType<typeof parseMantra> | null = null;
 
 function drawFrame(
   ctx: CanvasRenderingContext2D,
@@ -171,7 +163,18 @@ function drawFrame(
   const parsed = parseMantra(input.value);
 
   if (!isExport) {
-    romanizationEl.textContent = parsed.romanization;
+    // parseMantra memoizes, so object identity only changes with the input
+    if (parsed !== lastShownParse) {
+      romanizationEl.textContent = parsed.romanization;
+      if (parseWarningsEl) {
+        const hasUnknown = parsed.unknown.length > 0;
+        parseWarningsEl.hidden = !hasUnknown;
+        parseWarningsEl.textContent = hasUnknown
+          ? `Not recognized: ${parsed.unknown.join(" ")}`
+          : "";
+      }
+      lastShownParse = parsed;
+    }
     if (!isDraggingTimeline) {
       timelineEl.value = t.toString();
     }
@@ -212,7 +215,7 @@ function render(): void {
     rafId = null;
   }
 
-  const needsLoop = (playing && !isDraggingTimeline) || showWaves;
+  const needsLoop = playing && !isDraggingTimeline;
 
   if (needsLoop) {
     const loop = (): void => {
@@ -316,7 +319,6 @@ exportBtn?.addEventListener("click", async () => {
     const offCtx = offCanvas.getContext("2d", { willReadFrequently: true });
     if (!offCtx) throw new Error("No 2d context");
 
-    // @ts-ignore
     const { GIFEncoder, quantize, applyPalette } = await import("gifenc");
     const gif = new GIFEncoder();
     
@@ -359,36 +361,69 @@ exportBtn?.addEventListener("click", async () => {
   }
 });
 
-// Tabs logic
-tabs.forEach(tab => {
-  tab.addEventListener("click", () => {
-    tabs.forEach(t => t.classList.remove("active"));
-    tabContents.forEach(c => c.classList.remove("active"));
-    
-    tab.classList.add("active");
-    const targetId = tab.dataset.target;
-    if (targetId) {
-      document.getElementById(targetId)?.classList.add("active");
-    }
+// Tabs logic (ARIA tabs pattern: roving focus, arrow-key navigation)
+const tabList = Array.from(tabs);
+
+function activateTab(tab: HTMLButtonElement): void {
+  tabList.forEach(t => {
+    const active = t === tab;
+    t.classList.toggle("active", active);
+    t.setAttribute("aria-selected", active ? "true" : "false");
+    t.tabIndex = active ? 0 : -1;
+  });
+  tabContents.forEach(c => c.classList.remove("active"));
+
+  const targetId = tab.dataset.target;
+  if (targetId) {
+    document.getElementById(targetId)?.classList.add("active");
+  }
+}
+
+tabList.forEach((tab, index) => {
+  tab.addEventListener("click", () => activateTab(tab));
+  tab.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const delta = e.key === "ArrowRight" ? 1 : -1;
+    const next = tabList[(index + delta + tabList.length) % tabList.length]!;
+    next.focus();
+    activateTab(next);
   });
 });
 
-// Modal logic
-aboutBtn?.addEventListener("click", () => {
-  modal?.classList.remove("hidden");
-});
+// Modal logic (focus moves in on open, returns to the trigger on close)
+let modalReturnFocus: HTMLElement | null = null;
 
-closeModalBtn?.addEventListener("click", () => {
-  modal?.classList.add("hidden");
-});
+function openModal(): void {
+  if (!modal) return;
+  modalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  modal.classList.remove("hidden");
+  closeModalBtn?.focus();
+}
+
+function closeModal(): void {
+  if (!modal || modal.classList.contains("hidden")) return;
+  modal.classList.add("hidden");
+  modalReturnFocus?.focus();
+  modalReturnFocus = null;
+}
+
+aboutBtn?.addEventListener("click", openModal);
+closeModalBtn?.addEventListener("click", closeModal);
 
 modal?.addEventListener("click", (e) => {
-  if (e.target === modal) {
-    modal.classList.add("hidden");
-  }
+  if (e.target === modal) closeModal();
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeModal();
 });
 
 window.addEventListener("resize", debounce(() => render(), 48));
+
+// Canvas labels use Noto Serif Devanagari; repaint once webfonts arrive so the
+// first frame doesn't keep fallback glyphs.
+document.fonts?.ready.then(() => render());
 
 if (showWaves) canvas.classList.add("decomp-active");
 syncPlayPauseButton();

@@ -16,8 +16,16 @@ export function layoutTimes(n: number): number[] {
   return times;
 }
 
+// Single-entry memo: the render loop and GIF exporter call parseMantra every
+// frame with an unchanged input, and downstream track caches key off the
+// returned object's identity.
+let memoInput: string | null = null;
+let memoResult: ParsedMantra | null = null;
+
 export function parseMantra(input: string): ParsedMantra {
-  const { ids, iasts, iast } = parseDevanagari(input);
+  if (input === memoInput && memoResult) return memoResult;
+
+  const { ids, iasts, iast, unknown } = parseDevanagari(input);
   const times = layoutTimes(ids.length);
 
   const timed: TimedTarget[] = ids.map((id, i) => ({
@@ -43,9 +51,13 @@ export function parseMantra(input: string): ParsedMantra {
     }
   }
 
-  return {
+  const result: ParsedMantra = {
     label: input.trim() || "ॐ",
     romanization: iast,
     timed,
+    unknown,
   };
+  memoInput = input;
+  memoResult = result;
+  return result;
 }

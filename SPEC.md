@@ -41,7 +41,8 @@ Silence is modeled as **energy collapse**:
 
 1. Parse the mantra into an ordered sequence of **targets** (akṣaras / phoneme units from Devanagari input).
 2. Each unit maps to **control values** at sample times \(t_k\) (including leading/trailing silence targets).
-3. **Smooth interpolation** (Catmull-Rom interpolation) produces \(s(t), p(t), E(t), \phi(t), \delta(t)\) with fluid, continuous transitions. Values are clamped to prevent mathematical overshoots.
+3. **Smooth interpolation** (Catmull-Rom interpolation) produces the geometry tracks \(s(t), p(t), E(t), \phi(t), \delta(t)\) with fluid, continuous transitions. Values are clamped to prevent mathematical overshoots.
+4. The two style channels \(g(t)\) (ghoṣa) and \(h(t)\) (prāṇa) drive rendering treatment rather than geometry, and use **plateau interpolation**: each phoneme's value is held flat across its time region, with raised-cosine cross-fades only near region boundaries. Splining them like the geometry would average a consonant's voicing toward its vowel neighbours and make the contrast illegible.
 
 ---
 
@@ -54,14 +55,18 @@ Silence is modeled as **energy collapse**:
 | **Sthāna** | \(s(t)\) | \(A_x, A_y\) | Place of articulation (0 = Velar, 1 = Labial) → axis of the shape. Velar is vertical, Labial is horizontal. |
 | **Ābhyantara prayatna** | \(p(t)\) | \(A_x, A_y\) | “Effort” and openness (0 = Stop, 1 = Vowel) → how much the base line opens into an ellipse/circle. |
 | **Energy** | \(E(t)\) | Overall scale | Breath/voicing envelope. 0 = Silence, 1 = Sound. |
+| **Ghoṣa** | \(g(t)\) | Stroke weight & glow | Voicing (0 = aghoṣa, 1 = ghoṣavat). Voiced sounds draw heavier and brighter — the hum of the vocal cords. Geometry is unchanged. |
+| **Prāṇa** | \(h(t)\) | Breath halo | Aspiration (0 = alpaprāṇa, 0.5 = ūṣman breathiness, 1 = mahāprāṇa). A wide, faint second stroke pass around the figure. |
 
-### 3.2 Not encoded in v1 (identical visuals unless extended)
+Within a varga the five consonants share geometry (same \(s, p\)) and differ by \(g, h\): *ka* 0/0, *kha* 0/1, *ga* 1/0, *gha* 1/1, nasal 1/0.
 
-- **Ghoṣa** (voicing)
-- **Prāṇa** (aspiration)
-- **Anunāsikya** / nasality
+### 3.2 Not encoded (identical visuals unless extended)
 
-Future versions may add a third coordinate, line style, or a high-frequency modulation without changing the core equation family.
+- **Anunāsikya** / nasality (beyond the slight prayatna opening nasals already have)
+- **Vowel length** (*a/ā*, *i/ī*, *u/ū*)
+- **Sandhi** / cluster transition models
+
+Future versions may add a third coordinate or a high-frequency modulation without changing the core equation family.
 
 ---
 
@@ -80,10 +85,11 @@ Exact numeric targets live in the **phonetic registry** (`src/phonetics/registry
 ## 5. Input and parsing
 
 - **Input:** UTF-8 Devanagari string (e.g. `ॐ`, `नमः शिवाय`, `ॐ नमो भगवते वासुदेवाय`).
-- **Display:** IAST romanization is shown alongside the input for readability (e.g. `ॐ` → *oṃ*).
-- **Tokenizer:** Character-by-character Devanagari parser (`src/phonetics/devanagari.ts`). Handles consonant + vowel-sign combinations, virama (halant) for bare consonants, inherent short *a*, anusvara, visarga, and the `ॐ` ligature.
+- **Display:** IAST romanization is shown alongside the input for readability (e.g. `ॐ` → *aum*).
+- **Tokenizer:** Character-by-character Devanagari parser (`src/phonetics/devanagari.ts`) over NFD-normalized input. Handles consonant + vowel-sign combinations, virama (halant) for bare consonants, inherent short *a*, anusvara, visarga, the `ॐ` ligature, nukta (loanword) consonants in both precomposed and combining encodings (*ज़ z*, *फ़ f*, …), candra vowels (*ऍ*, *ऑ*), the Vedic retroflex lateral *ळ*, avagraha, and danda. Joiners, Vedic accents, and digits are skipped silently.
+- **Unknown characters** are never silently dropped: they are returned in an `unknown` list and shown in the UI. Unmapped Devanagari *letters* additionally emit a neutral placeholder target so the shape acknowledges them.
 
-If the input contains no Devanagari characters, the parser falls back to the default `ॐ` (oṃ) sequence.
+If the input contains no Devanagari characters, the parser falls back to the default `ॐ` (aum) sequence.
 
 ---
 
@@ -116,9 +122,10 @@ Each button shows the IAST romanization as primary text with the Devanagari belo
 
 ## 7. Roadmap
 
-1. **v1 (this repo):** Catmull-Rom tracks + full varṇamālā phonetic registry + Devanagari parser + canvas + preset mantras and bīja syllables.
-2. **v2:** Explicit sandhi / cluster transition models; richer sthāna grid (varga-aware).
-3. **v3:** Optional channels for ghoṣa, prāṇa, anunāsikya.
+1. **v1:** Catmull-Rom tracks + full varṇamālā phonetic registry + Devanagari parser + canvas + preset mantras and bīja syllables. ✅
+2. **v1.5 (this repo):** Ghoṣa and prāṇa style channels; nukta/candra/Vedic parser coverage with unknown-character surfacing. ✅
+3. **v2:** Explicit sandhi / cluster transition models; richer sthāna grid (varga-aware).
+4. **v3:** Anunāsikya (nasality) channel; vowel length.
 
 ---
 
@@ -126,7 +133,7 @@ Each button shows the IAST romanization as primary text with the Devanagari belo
 
 | Area | Responsibility |
 |------|----------------|
-| `src/math/curve.ts` | Evaluate \(x,y\) from \(s, p, E, \phi, \delta\) |
+| `src/math/curve.ts` | Parameter tracks \(s, p, E, \phi, \delta, g, h\) + amplitude mapping \(A_x, A_y\) |
 | `src/math/spline.ts` | Catmull-Rom interpolation over control points |
 | `src/phonetics/types.ts` | Types for targets and parse results |
 | `src/phonetics/registry.ts` | Phoneme → default phonetic matrix values |

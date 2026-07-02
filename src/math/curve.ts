@@ -12,21 +12,32 @@ export type TrackSample = {
   delta: number;
 };
 
-export type CurveParams = {
-  omega: number;
-  /** Rotation applied after evaluating x,y in canonical axes. */
-  viewRotation: number;
-};
+/**
+ * Map Sthāna (s) and Prayatna (p) to the anisotropic amplitudes of the
+ * Lissajous figure (SPEC §2.1):
+ *   s=0 (Velar)  → A_x small, A_y large (tall vertical shape)
+ *   s=1 (Labial) → A_x large, A_y shrinks as p closes (wide horizontal shape)
+ *   p opens the base line into an ellipse/circle.
+ */
+export function axesFor(s: number, p: number): { ax: number; ay: number } {
+  return { ax: s, ay: 1.0 - s * (1 - p) };
+}
 
 function knotsFromControls(
   times: number[],
   values: number[],
 ): Knot[] {
-  return times.map((t, i) => ({ t, v: values[i]! }));
+  return times
+    .map((t, i) => ({ t, v: values[i]! }))
+    .sort((a, b) => a.t - b.t);
 }
 
 /**
- * Build smooth tracks s, p, E, φ, δ from timed control targets (SPEC §2.3).
+ * Build smooth geometry tracks s, p, E, φ, δ from timed control targets (SPEC §2.3).
+ * The ghoṣa/prāṇa style channels are NOT splined here — they use plateau
+ * interpolation per phoneme region (see render/draw.ts) so a consonant's
+ * voicing/aspiration reads at full strength instead of being averaged away
+ * by its vowel neighbours.
  */
 export function buildTracks(
   times: number[],
@@ -50,37 +61,4 @@ export function buildTracks(
     phi: evalSpline1D(kPhi, t),
     delta: evalSpline1D(kDelta, t),
   });
-}
-
-/**
- * Core family (SPEC §2.1): x = E*A_x sin(ωt+φ), y = E*A_y sin(ωt+φ+δ), then rotate by viewRotation.
- * A_x and A_y are derived from Sthāna (s) and Prayatna (p).
- */
-export function evalCurvePoint(
-  t: number,
-  track: (t: number) => TrackSample,
-  params: CurveParams,
-): { x: number; y: number; amp: number } {
-  const sample = track(t);
-  
-  // Base width for a Velar vowel (thin tall ellipse)
-  const W = 0.0;
-  
-  // Map Sthāna and Prayatna to shape amplitudes
-  // s=0 (Velar) -> A_x is small (p*W), A_y is large (1.0)
-  // s=1 (Labial) -> A_x is large (1.0), A_y is small (p*W)
-  const ax = sample.s + (1 - sample.s) * sample.p * W;
-  const ay = 1.0 - sample.s * (1 - sample.p);
-
-  const th = params.omega * t + sample.phi;
-  const x0 = sample.E * ax * Math.sin(th);
-  const y0 = sample.E * ay * Math.sin(th + sample.delta);
-  
-  const c = Math.cos(params.viewRotation);
-  const sn = Math.sin(params.viewRotation);
-  const x = x0 * c - y0 * sn;
-  const y = x0 * sn + y0 * c;
-  
-  const amp = sample.E * Math.hypot(ax, ay);
-  return { x, y, amp };
 }

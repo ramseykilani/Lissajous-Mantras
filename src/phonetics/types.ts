@@ -12,6 +12,10 @@ export type ArticulationTarget = {
   phi: number;
   /** Relative phase δ between x and y components. */
   delta: number;
+  /** Ghoṣa (Voicing): 0 (Unvoiced) to 1 (Voiced) → stroke weight/glow. */
+  ghosa: number;
+  /** Prāṇa (Aspiration): 0 (Unaspirated) to 1 (Aspirated) → breath halo. */
+  prana: number;
 };
 
 export type TimedTarget = {
@@ -29,4 +33,6 @@ export type ParsedMantra = {
   romanization: string;
   /** Ordered targets with knot times in [0,1]. */
   timed: TimedTarget[];
+  /** Characters the parser could not interpret (deduped, in input order). */
+  unknown: string[];
 };

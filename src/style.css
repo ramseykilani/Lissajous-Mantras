@@ -91,6 +91,25 @@ header h1 {
   color: #fff;
 }
 
+.nowrap {
+  white-space: nowrap;
+}
+
+.lede-sep {
+  margin-left: 4px;
+  color: var(--muted);
+}
+
+.modal-content .modal-footer {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 1rem;
+}
+
+.modal-content .modal-footer a {
+  color: var(--accent);
+}
+
 .field {
   display: flex;
   flex-direction: column;
